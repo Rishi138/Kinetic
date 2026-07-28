@@ -7,7 +7,6 @@ import numpy as np
 from CustomKalman import KalmanFilter3D
 import detection_funcs
 
-
 LANDMARKS = {
     "r_shoulder": 11, "l_shoulder": 12,
     "r_hip": 23, "l_hip": 24,
@@ -32,6 +31,22 @@ def draw_depth_point(frame, pt, z):
     cv2.circle(overlay, pt, glow_radius, (46, glow_intensity, 20), -1)
     cv2.addWeighted(overlay, 0.25, frame, 0.75, 0, frame)
     cv2.circle(frame, pt, radius, detection_funcs.CLINICAL_GREEN_BGR, -1)
+
+
+def bias_hip_outward(hip, opposite_hip, amount=0.05):
+    direction = hip - opposite_hip
+    length = np.linalg.norm(direction[:2])
+
+    if length < 1e-6:
+        return hip
+
+    direction = direction / length
+
+    corrected = hip.copy()
+    corrected[0] += direction[0] * amount
+    corrected[1] += direction[1] * amount
+
+    return corrected
 
 
 base_option = python.BaseOptions(model_asset_path="pose_landmarker_heavy.task")
@@ -85,6 +100,88 @@ while True:
         for name, state in image_states.items():
             pt = (int(state[0] * w), int(state[1] * h))
             draw_depth_point(frame, pt, state[2])
+
+        # Here
+        HIP_BIAS = 0.05
+
+        r_hip_corrected = bias_hip_outward(
+            world_states["r_hip"],
+            world_states["l_hip"],
+            HIP_BIAS
+        )
+
+        l_hip_corrected = bias_hip_outward(
+            world_states["l_hip"],
+            world_states["r_hip"],
+            HIP_BIAS
+        )
+
+        r_score = detection_funcs.knee_deviation(
+            r_hip_corrected,
+            world_states["r_knee"],
+            world_states["r_ankle"],
+            offset=-0.03,
+            side=True
+        )
+
+        l_score = detection_funcs.knee_deviation(
+            l_hip_corrected,
+            world_states["l_knee"],
+            world_states["l_ankle"],
+            offset=0.03,
+            side=False
+        )
+
+        panel_x = w - 420
+        panel_y = 20
+        panel_w = 400
+        panel_h = 120
+
+        cv2.rectangle(
+            frame,
+            (panel_x, panel_y),
+            (panel_x + panel_w, panel_y + panel_h),
+            detection_funcs.PANEL_BG_BGR,
+            -1
+        )
+
+        cv2.rectangle(
+            frame,
+            (panel_x, panel_y),
+            (panel_x + panel_w, panel_y + panel_h),
+            detection_funcs.CLINICAL_GRAY_BGR,
+            2
+        )
+
+        cv2.putText(
+            frame,
+            "KNEE ALIGNMENT",
+            (panel_x + 15, panel_y + 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.75,
+            detection_funcs.TEXT_BRIGHT_BGR,
+            2
+        )
+
+        cv2.putText(
+            frame,
+            f"RIGHT: {r_score}",
+            (panel_x + 15, panel_y + 65),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            detection_funcs.CLINICAL_GREEN_BGR,
+            2
+        )
+
+        cv2.putText(
+            frame,
+            f"LEFT:  {l_score}",
+            (panel_x + 15, panel_y + 95),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            detection_funcs.CLINICAL_GREEN_BGR,
+            2
+        )
 
     cv2.imshow("Kinetic", frame)
 
