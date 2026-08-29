@@ -43,8 +43,8 @@ def bias_hip_outward(hip, opposite_hip, amount=0.05):
     direction = direction / length
 
     corrected = hip.copy()
-    corrected[0] += direction[0] * amount
-    corrected[1] += direction[1] * amount
+    corrected[0] -= direction[0] * amount
+    corrected[1] -= direction[1] * amount
 
     return corrected
 
@@ -102,7 +102,7 @@ while True:
             draw_depth_point(frame, pt, state[2])
 
         # Here
-        HIP_BIAS = 0.05
+        HIP_BIAS = -0.035
 
         r_hip_corrected = bias_hip_outward(
             world_states["r_hip"],

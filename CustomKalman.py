@@ -54,7 +54,7 @@ class KalmanFilter3D:
         F = self.build_F(dt)
         Q = self.build_Q(dt, self.Q_base)
 
-        self.state[3:] *= 0.92
+        self.state[3:] *= 0.98
 
         # state pred with F
         self.state = F @ self.state
