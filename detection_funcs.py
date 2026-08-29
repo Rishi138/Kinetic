@@ -34,15 +34,13 @@ def knee_deviation(hip, knee, ankle, offset, side):
     if not side:
         knee_dist = -1 * knee_dist
 
-    # over punish valgus
+    # over punish valgus, bigger risk factor
     if knee_dist > 0:
         tag = "VARUS"
         knee_dist *= 0.6
     elif knee_dist < 0:
         tag = "VALGUS"
         knee_dist *= 2
-    else:
-        return f"GOOD"
 
     if abs(knee_dist) < 0.035:
         return f"GOOD ({knee_dist})"
