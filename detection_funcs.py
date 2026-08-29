@@ -34,6 +34,7 @@ def knee_deviation(hip, knee, ankle, offset, side):
     if not side:
         knee_dist = -1 * knee_dist
 
+    # over punish valgus
     if knee_dist > 0:
         tag = "VARUS"
         knee_dist *= 0.6
