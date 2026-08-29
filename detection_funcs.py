@@ -40,6 +40,8 @@ def knee_deviation(hip, knee, ankle, offset, side):
     elif knee_dist < 0:
         tag = "VALGUS"
         knee_dist *= 2
+    else:
+        return f"GOOD"
 
     if abs(knee_dist) < 0.035:
         return f"GOOD ({knee_dist})"
