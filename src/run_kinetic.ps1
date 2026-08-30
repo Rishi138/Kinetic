@@ -64,7 +64,7 @@ function Stop-All {
 Start-All
 
 Write-Host ""
-Write-Host "Controls: [R] restart all  [C] quit all" -ForegroundColor Yellow
+Write-Host "Controls: [R] restart all  [Q] quit all" -ForegroundColor Yellow
 Write-Host ""
 
 while ($true) {
@@ -75,7 +75,7 @@ while ($true) {
             Start-Sleep -Seconds 1
             Start-All
         }
-        "C" {
+        "Q" {
             Stop-All
             Write-Host "Exiting control panel." -ForegroundColor Yellow
             exit

@@ -8,22 +8,27 @@ from CustomKalman import KalmanFilter3D
 import detection_funcs
 import asyncio
 import websockets
+import json
 
-
-WS_URL = "ws://localhost:8000/main_cv"
-_ws = None
+WS_URL_FRAME = "ws://localhost:8000/main_cv"
+WS_URL_DATA = "ws://localhost:8000/main_cv_data"
+_ws_frame = None
+_ws_data = None
 _loop = asyncio.new_event_loop()
 
 async def _connect():
-    global _ws
-    _ws = await websockets.connect(WS_URL)
+    global _ws_frame, _ws_data
+    _ws_frame = await websockets.connect(WS_URL_FRAME)
+    _ws_data = await websockets.connect(WS_URL_DATA)
 
 _loop.run_until_complete(_connect())
 
 def send_frame(frame):
     _, jpeg = cv2.imencode(".jpg", frame)
-    _loop.run_until_complete(_ws.send(jpeg.tobytes()))
+    _loop.run_until_complete(_ws_frame.send(jpeg.tobytes()))
 
+def send_data(data_cycle):
+    _loop.run_until_complete(_ws_data.send(json.dumps(data_cycle)))
 
 LANDMARKS = {
     "r_shoulder": 11, "l_shoulder": 12,
@@ -94,6 +99,7 @@ while True:
 
     timestamp_ms = int((time.time() - start_time) * 1000)
     result = detector.detect_for_video(mp_image, timestamp_ms)
+    data_cycle = []
 
     if result.pose_landmarks and result.pose_world_landmarks:
         timestamp_s = time.time() - start_time
@@ -150,57 +156,17 @@ while True:
             side=False
         )
 
-        panel_x = w - 420
-        panel_y = 20
-        panel_w = 400
-        panel_h = 120
+        valg_var_data = {
+            "title": "Valgus and Varus",
+            "labels": ["RIGHT", "LEFT"],
+            "display": [r_score, l_score]
+        }
 
-        cv2.rectangle(
-            frame,
-            (panel_x, panel_y),
-            (panel_x + panel_w, panel_y + panel_h),
-            detection_funcs.PANEL_BG_BGR,
-            -1
-        )
+        data_cycle.append(valg_var_data)
 
-        cv2.rectangle(
-            frame,
-            (panel_x, panel_y),
-            (panel_x + panel_w, panel_y + panel_h),
-            detection_funcs.CLINICAL_GRAY_BGR,
-            2
-        )
 
-        cv2.putText(
-            frame,
-            "KNEE ALIGNMENT",
-            (panel_x + 15, panel_y + 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.75,
-            detection_funcs.TEXT_BRIGHT_BGR,
-            2
-        )
-
-        cv2.putText(
-            frame,
-            f"RIGHT: {r_score}",
-            (panel_x + 15, panel_y + 65),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            detection_funcs.CLINICAL_GREEN_BGR,
-            2
-        )
-
-        cv2.putText(
-            frame,
-            f"LEFT:  {l_score}",
-            (panel_x + 15, panel_y + 95),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            detection_funcs.CLINICAL_GREEN_BGR,
-            2
-        )
     send_frame(frame)
+    send_data(data_cycle)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
