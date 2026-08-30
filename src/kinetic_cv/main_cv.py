@@ -10,7 +10,7 @@ import asyncio
 import websockets
 
 
-WS_URL = "ws://localhost:8000/engine"
+WS_URL = "ws://localhost:8000/main_cv"
 _ws = None
 _loop = asyncio.new_event_loop()
 
