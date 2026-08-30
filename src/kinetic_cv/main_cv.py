@@ -6,6 +6,24 @@ import time
 import numpy as np
 from CustomKalman import KalmanFilter3D
 import detection_funcs
+import asyncio
+import websockets
+
+
+WS_URL = "ws://localhost:8000/engine"
+_ws = None
+_loop = asyncio.new_event_loop()
+
+async def _connect():
+    global _ws
+    _ws = await websockets.connect(WS_URL)
+
+_loop.run_until_complete(_connect())
+
+def send_frame(frame):
+    _, jpeg = cv2.imencode(".jpg", frame)
+    _loop.run_until_complete(_ws.send(jpeg.tobytes()))
+
 
 LANDMARKS = {
     "r_shoulder": 11, "l_shoulder": 12,
@@ -182,8 +200,7 @@ while True:
             detection_funcs.CLINICAL_GREEN_BGR,
             2
         )
-
-    cv2.imshow("Kinetic", frame)
+    send_frame(frame)
 
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
