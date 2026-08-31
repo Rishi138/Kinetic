@@ -30,6 +30,10 @@ def send_frame(frame):
 def send_data(data_cycle):
     _loop.run_until_complete(_ws_data.send(json.dumps(data_cycle)))
 
+l_valg_var = []
+r_valg_var = []
+count = 60
+
 LANDMARKS = {
     "r_shoulder": 11, "l_shoulder": 12,
     "r_hip": 23, "l_hip": 24,
@@ -102,6 +106,7 @@ while True:
     data_cycle = []
 
     if result.pose_landmarks and result.pose_world_landmarks:
+        count -= 1
         timestamp_s = time.time() - start_time
         pose = result.pose_landmarks[0]
         pose_world = result.pose_world_landmarks[0]
@@ -140,7 +145,7 @@ while True:
             HIP_BIAS
         )
 
-        r_score = detection_funcs.knee_deviation(
+        r_score, r_scale_pos = detection_funcs.knee_deviation(
             r_hip_corrected,
             world_states["r_knee"],
             world_states["r_ankle"],
@@ -148,7 +153,7 @@ while True:
             side=True
         )
 
-        l_score = detection_funcs.knee_deviation(
+        l_score, l_scale_pos = detection_funcs.knee_deviation(
             l_hip_corrected,
             world_states["l_knee"],
             world_states["l_ankle"],
@@ -156,11 +161,21 @@ while True:
             side=False
         )
 
+        if count == 0:
+            r_valg_var.append(r_scale_pos)
+            l_valg_var.append(l_scale_pos)
+            count = 12
+
         valg_var_data = {
             "title": "Valgus and Varus",
             "labels": ["RIGHT", "LEFT"],
-            "display": [r_score, l_score]
+            "display": [r_score, l_score],
+            "scale_pos": [r_scale_pos, l_scale_pos],
+            "bands": [0,0.35,0.45,0.65,0.70,1],
+            "curr_session_trend": [r_valg_var, l_valg_var]
         }
+
+
 
         data_cycle.append(valg_var_data)
 

@@ -1,5 +1,3 @@
-import cv2
-import numpy as np
 import math
 
 CLINICAL_GREEN_BGR = (113, 204, 46)
@@ -10,7 +8,6 @@ CLINICAL_GRAY_BGR = (166, 165, 149)
 PANEL_BG_BGR = (30, 28, 26)
 TEXT_MUTED_BGR = (150, 150, 155)
 TEXT_BRIGHT_BGR = (235, 235, 235)
-
 
 def knee_deviation(hip, knee, ankle, offset, side):
     # side true right
@@ -43,7 +40,8 @@ def knee_deviation(hip, knee, ankle, offset, side):
         knee_dist *= 2
 
     if abs(knee_dist) < 0.035:
-        return f"GOOD ({knee_dist})"
+        scale_pos = abs(knee_dist)/0.1
+        return f"GOOD ({knee_dist})", scale_pos
     elif abs(knee_dist) < 0.045:
         tag2 = "SLIGHT"
     elif abs(knee_dist) < 0.065:
@@ -55,4 +53,8 @@ def knee_deviation(hip, knee, ankle, offset, side):
     else:
         tag2 = "SEVERE"
 
-    return f"{tag2} KNEE {tag} ({knee_dist})"
+    scale_pos = abs(knee_dist)/0.1
+    if scale_pos > 1.0:
+        scale_pos = 1.0
+
+    return f"{tag2} KNEE {tag} ({knee_dist})", scale_pos
