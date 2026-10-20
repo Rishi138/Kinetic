@@ -16,19 +16,24 @@ _ws_frame = None
 _ws_data = None
 _loop = asyncio.new_event_loop()
 
+
 async def _connect():
     global _ws_frame, _ws_data
     _ws_frame = await websockets.connect(WS_URL_FRAME)
     _ws_data = await websockets.connect(WS_URL_DATA)
 
+
 _loop.run_until_complete(_connect())
+
 
 def send_frame(frame):
     _, jpeg = cv2.imencode(".jpg", frame)
     _loop.run_until_complete(_ws_frame.send(jpeg.tobytes()))
 
+
 def send_data(data_cycle):
     _loop.run_until_complete(_ws_data.send(json.dumps(data_cycle)))
+
 
 l_valg_var = []
 r_valg_var = []
@@ -92,7 +97,79 @@ cap = cv2.VideoCapture(0)
 image_filters = {name: KalmanFilter3D() for name in LANDMARKS}
 world_filters = {name: KalmanFilter3D() for name in LANDMARKS}
 
+time.sleep(5)
+
 start_time = time.time()
+calib_time = start_time
+curr_time = time.time()
+point_biases = []
+
+while (curr_time - calib_time) < 5:
+    ret, frame = cap.read()
+    if not ret:
+        curr_time = time.time()
+        continue
+
+    frame = cv2.flip(frame, 1)
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+
+    timestamp_ms = int((time.time() - start_time) * 1000)
+    timestamp_s = time.time() - start_time
+
+    result = detector.detect_for_video(mp_image, timestamp_ms)
+
+    if result.pose_landmarks and result.pose_world_landmarks:
+        pose = result.pose_landmarks[0]
+        pose_world = result.pose_world_landmarks[0]
+
+        for name, idx in LANDMARKS.items():
+            lm = pose[idx]
+            wlm = pose_world[idx]
+            conf = lm.visibility
+
+            image_state = image_filters[name].step(
+                [lm.x, lm.y, lm.z],
+                confidence=conf,
+                timestamp=timestamp_s
+            )
+
+            world_state = world_filters[name].step(
+                [wlm.x, wlm.y, wlm.z],
+                confidence=conf,
+                timestamp=timestamp_s
+            )
+
+            point_biases.append({
+                "name": name,
+                "image": -np.array(image_state),
+                "world": -np.array(world_state)
+            })
+
+    curr_time = time.time()
+
+averaged_biases = {}
+
+for name in LANDMARKS:
+    samples = [
+        sample for sample in point_biases
+        if sample["name"] == name
+    ]
+
+    if samples:
+        averaged_biases[name] = {
+            "image": np.mean(
+                [sample["image"] for sample in samples], axis=0
+            ),
+            "world": np.mean(
+                [sample["world"] for sample in samples], axis=0
+            )
+        }
+    else:
+        averaged_biases[name] = {
+            "image": np.zeros(3),
+            "world": np.zeros(3)
+        }
 
 while True:
     ret, frame = cap.read()
@@ -148,18 +225,42 @@ while True:
             HIP_BIAS
         )
 
+        world_corrected = {}
+
+        for name, state in world_states.items():
+            samples = [
+                sample["world"]
+                for sample in point_biases
+                if sample["name"] == name
+            ]
+
+            bias = np.mean(samples, axis=0) if samples else np.zeros(3)
+            world_corrected[name] = state + bias
+
+        r_hip_corrected = bias_hip_outward(
+            world_corrected["r_hip"],
+            world_corrected["l_hip"],
+            -0.035
+        )
+
+        l_hip_corrected = bias_hip_outward(
+            world_corrected["l_hip"],
+            world_corrected["r_hip"],
+            -0.035
+        )
+
         r_score, r_scale_pos = detection_funcs.knee_deviation(
             r_hip_corrected,
-            world_states["r_knee"],
-            world_states["r_ankle"],
+            world_corrected["r_knee"],
+            world_corrected["r_ankle"],
             offset=-0.03,
             side=True
         )
 
         l_score, l_scale_pos = detection_funcs.knee_deviation(
             l_hip_corrected,
-            world_states["l_knee"],
-            world_states["l_ankle"],
+            world_corrected["l_knee"],
+            world_corrected["l_ankle"],
             offset=0.03,
             side=False
         )
@@ -185,10 +286,10 @@ while True:
 
         hip_drop_data = {
             "title": "Hip Drop",
-            "labels": ["RIGHT","LEFT"],
+            "labels": ["RIGHT", "LEFT"],
             "display": [r_hip_score, l_hip_score],
             "scale_pos": [r_hip_scale_pos, l_hip_scale_pos],
-            "bands": [0, 0.30, 0.40, 0.50, 0.60, 0.80,1],
+            "bands": [0, 0.30, 0.40, 0.50, 0.60, 0.80, 1],
             "curr_session_trend": [r_drop_var, l_drop_var]
         }
 
@@ -197,15 +298,12 @@ while True:
             "labels": ["RIGHT", "LEFT"],
             "display": [r_score, l_score],
             "scale_pos": [r_scale_pos, l_scale_pos],
-            "bands": [0,0.35,0.45,0.65,0.70,0.95,1],
+            "bands": [0, 0.35, 0.45, 0.65, 0.70, 0.95, 1],
             "curr_session_trend": [r_valg_var, l_valg_var]
         }
 
-
-
         data_cycle.append(valg_var_data)
         data_cycle.append(hip_drop_data)
-
 
     send_frame(frame)
     send_data(data_cycle)
