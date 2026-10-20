@@ -9,6 +9,51 @@ PANEL_BG_BGR = (30, 28, 26)
 TEXT_MUTED_BGR = (150, 150, 155)
 TEXT_BRIGHT_BGR = (235, 235, 235)
 
+
+def hip_deviation(hips):
+    lx, ly = hips[0][0], hips[0][1]
+    rx, ry = hips[1][0], hips[1][1]
+
+    dx = rx - lx
+    dy = ry - ly
+
+    if abs(dx) < 1e-6:
+        bad = ("UNRELIABLE HIP POSITION", 0.0)
+        return [bad, bad]
+
+    hip_drop = dy / abs(dx)
+
+    results = []
+
+    for deviation, direction in [(hip_drop, "RIGHT HIP DROP"), (-hip_drop, "LEFT HIP DROP")]:
+        magnitude = abs(deviation)
+
+        if magnitude < 0.035:
+            scale_pos = min(magnitude / 0.1, 1.0)
+            results.append(
+                (f"GOOD HIP ALIGNMENT ({deviation:.4f})", scale_pos)
+            )
+            continue
+
+        if magnitude < 0.025:
+            tag = "SLIGHT"
+        elif magnitude < 0.03:
+            tag = "MILD"
+        elif magnitude < 0.035:
+            tag = "CONCERNING"
+        elif magnitude < 0.04:
+            tag = "BAD"
+        else:
+            tag = "SEVERE"
+
+        scale_pos = min(magnitude / 0.1, 1.0)
+        results.append(
+            [f"{tag} {direction} ({deviation:.4f})", scale_pos]
+        )
+
+    return results
+
+
 def knee_deviation(hip, knee, ankle, offset, side):
     # side true right
     # side false left
@@ -40,7 +85,7 @@ def knee_deviation(hip, knee, ankle, offset, side):
         knee_dist *= 2
 
     if abs(knee_dist) < 0.035:
-        scale_pos = abs(knee_dist)/0.1
+        scale_pos = abs(knee_dist) / 0.1
         return f"GOOD ({knee_dist})", scale_pos
     elif abs(knee_dist) < 0.045:
         tag2 = "SLIGHT"
@@ -53,11 +98,8 @@ def knee_deviation(hip, knee, ankle, offset, side):
     else:
         tag2 = "SEVERE"
 
-    scale_pos = abs(knee_dist)/0.1
+    scale_pos = abs(knee_dist) / 0.1
     if scale_pos > 1.0:
         scale_pos = 1.0
 
     return f"{tag2} KNEE {tag} ({knee_dist})", scale_pos
-
-
-

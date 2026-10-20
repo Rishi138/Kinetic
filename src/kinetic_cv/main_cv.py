@@ -32,6 +32,9 @@ def send_data(data_cycle):
 
 l_valg_var = []
 r_valg_var = []
+r_drop_var = []
+l_drop_var = []
+
 count = 60
 
 LANDMARKS = {
@@ -161,10 +164,31 @@ while True:
             side=False
         )
 
+        hip_drop_scores = detection_funcs.hip_deviation([
+            l_hip_corrected,
+            r_hip_corrected
+        ])
+
+        l_hip_score = hip_drop_scores[0][0]
+        l_hip_scale_pos = hip_drop_scores[0][1]
+
+        r_hip_score = hip_drop_scores[1][0]
+        r_hip_scale_pos = hip_drop_scores[1][1]
+
         if count == 0:
             r_valg_var.append(r_scale_pos)
             l_valg_var.append(l_scale_pos)
+            h_drop_var.append(hip_scale_pos)
             count = 12
+
+        hip_drop_data = {
+            "title": "Hip Drop",
+            "labels": ["HIP DROP"],
+            'display': [hip_drop_score],
+            "scale_pos": [hip_scale_pos],
+            "bands": [0,0.35,0.45,0.65,0.70,1],
+            "curr_session_trend": [h_drop_var]
+        }
 
         valg_var_data = {
             "title": "Valgus and Varus",
@@ -178,6 +202,7 @@ while True:
 
 
         data_cycle.append(valg_var_data)
+        data_cycle.append(hip_drop_data)
 
 
     send_frame(frame)
