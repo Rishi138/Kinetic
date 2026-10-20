@@ -228,13 +228,7 @@ while True:
         world_corrected = {}
 
         for name, state in world_states.items():
-            samples = [
-                sample["world"]
-                for sample in point_biases
-                if sample["name"] == name
-            ]
-
-            bias = np.mean(samples, axis=0) if samples else np.zeros(3)
+            bias = averaged_biases[name]["world"]
             world_corrected[name] = state + bias
 
         r_hip_corrected = bias_hip_outward(
