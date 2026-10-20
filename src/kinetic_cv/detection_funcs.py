@@ -10,6 +10,7 @@ TEXT_MUTED_BGR = (150, 150, 155)
 TEXT_BRIGHT_BGR = (235, 235, 235)
 
 
+
 def hip_deviation(hips):
     lx, ly = hips[0][0], hips[0][1]
     rx, ry = hips[1][0], hips[1][1]
@@ -18,38 +19,46 @@ def hip_deviation(hips):
     dy = ry - ly
 
     if abs(dx) < 1e-6:
-        bad = ("UNRELIABLE HIP POSITION", 0.0)
-        return [bad, bad]
+        bad = ["UNRELIABLE HIP POSITION", 0.0]
+        return [bad.copy(), bad.copy()]
 
+    # Positive means right hip is lower.
     hip_drop = dy / abs(dx)
 
     results = []
 
-    for deviation, direction in [(hip_drop, "RIGHT HIP DROP"), (-hip_drop, "LEFT HIP DROP")]:
-        magnitude = abs(deviation)
+    # Index 0 = left hip; index 1 = right hip.
+    # Only score a hip when that hip is actually lower.
+    for deviation, direction in [
+        (-hip_drop, "LEFT HIP DROP"),
+        (hip_drop, "RIGHT HIP DROP")
+    ]:
+        deviation = max(0.0, deviation)
+        magnitude = deviation
 
-        if magnitude < 0.035:
-            scale_pos = min(magnitude / 0.1, 1.0)
-            results.append(
-                (f"GOOD HIP ALIGNMENT ({deviation:.4f})", scale_pos)
-            )
-            continue
-
-        if magnitude < 0.025:
+        if magnitude < 0.07:
+            tag = "GOOD"
+        elif magnitude < 0.08:
             tag = "SLIGHT"
-        elif magnitude < 0.03:
+        elif magnitude < 0.09:
             tag = "MILD"
-        elif magnitude < 0.035:
+        elif magnitude < 0.1:
             tag = "CONCERNING"
-        elif magnitude < 0.04:
+        elif magnitude < 0.11:
             tag = "BAD"
         else:
             tag = "SEVERE"
 
-        scale_pos = min(magnitude / 0.1, 1.0)
-        results.append(
-            [f"{tag} {direction} ({deviation:.4f})", scale_pos]
-        )
+        scale_pos = min(magnitude / 0.05, 1.0)
+
+        if tag == "GOOD":
+            results.append(
+                [f"GOOD HIP ALIGNMENT ({deviation:.4f})", scale_pos]
+            )
+        else:
+            results.append(
+                [f"{tag} {direction} ({deviation:.4f})", scale_pos]
+            )
 
     return results
 

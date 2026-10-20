@@ -178,16 +178,18 @@ while True:
         if count == 0:
             r_valg_var.append(r_scale_pos)
             l_valg_var.append(l_scale_pos)
-            h_drop_var.append(hip_scale_pos)
+            r_drop_var.append(r_hip_scale_pos)
+            l_drop_var.append(l_hip_scale_pos)
+
             count = 12
 
         hip_drop_data = {
             "title": "Hip Drop",
-            "labels": ["HIP DROP"],
-            'display': [hip_drop_score],
-            "scale_pos": [hip_scale_pos],
-            "bands": [0,0.35,0.45,0.65,0.70,1],
-            "curr_session_trend": [h_drop_var]
+            "labels": ["RIGHT","LEFT"],
+            "display": [r_hip_score, l_hip_score],
+            "scale_pos": [r_hip_scale_pos, l_hip_scale_pos],
+            "bands": [0, 0.30, 0.40, 0.50, 0.60, 0.80,1],
+            "curr_session_trend": [r_drop_var, l_drop_var]
         }
 
         valg_var_data = {
@@ -195,7 +197,7 @@ while True:
             "labels": ["RIGHT", "LEFT"],
             "display": [r_score, l_score],
             "scale_pos": [r_scale_pos, l_scale_pos],
-            "bands": [0,0.35,0.45,0.65,0.70,1],
+            "bands": [0,0.35,0.45,0.65,0.70,0.95,1],
             "curr_session_trend": [r_valg_var, l_valg_var]
         }
 
