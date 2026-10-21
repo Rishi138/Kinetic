@@ -12,6 +12,7 @@ import json
 
 WS_URL_FRAME = "ws://localhost:8000/main_cv"
 WS_URL_DATA = "ws://localhost:8000/main_cv_data"
+
 _ws_frame = None
 _ws_data = None
 _loop = asyncio.new_event_loop()
@@ -84,7 +85,10 @@ def bias_hip_outward(hip, opposite_hip, amount=0.05):
     return corrected
 
 
-base_option = python.BaseOptions(model_asset_path="pose_landmarker_heavy.task")
+base_option = python.BaseOptions(
+    model_asset_path="pose_landmarker_heavy.task"
+)
+
 options = vision.PoseLandmarkerOptions(
     base_options=base_option,
     num_poses=1,
@@ -94,82 +98,15 @@ options = vision.PoseLandmarkerOptions(
 detector = vision.PoseLandmarker.create_from_options(options)
 cap = cv2.VideoCapture(0)
 
-image_filters = {name: KalmanFilter3D() for name in LANDMARKS}
-world_filters = {name: KalmanFilter3D() for name in LANDMARKS}
+image_filters = {
+    name: KalmanFilter3D() for name in LANDMARKS
+}
 
-time.sleep(5)
+world_filters = {
+    name: KalmanFilter3D() for name in LANDMARKS
+}
 
 start_time = time.time()
-calib_time = start_time
-curr_time = time.time()
-point_biases = []
-
-while (curr_time - calib_time) < 5:
-    ret, frame = cap.read()
-    if not ret:
-        curr_time = time.time()
-        continue
-
-    frame = cv2.flip(frame, 1)
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-
-    timestamp_ms = int((time.time() - start_time) * 1000)
-    timestamp_s = time.time() - start_time
-
-    result = detector.detect_for_video(mp_image, timestamp_ms)
-
-    if result.pose_landmarks and result.pose_world_landmarks:
-        pose = result.pose_landmarks[0]
-        pose_world = result.pose_world_landmarks[0]
-
-        for name, idx in LANDMARKS.items():
-            lm = pose[idx]
-            wlm = pose_world[idx]
-            conf = lm.visibility
-
-            image_state = image_filters[name].step(
-                [lm.x, lm.y, lm.z],
-                confidence=conf,
-                timestamp=timestamp_s
-            )
-
-            world_state = world_filters[name].step(
-                [wlm.x, wlm.y, wlm.z],
-                confidence=conf,
-                timestamp=timestamp_s
-            )
-
-            point_biases.append({
-                "name": name,
-                "image": -np.array(image_state),
-                "world": -np.array(world_state)
-            })
-
-    curr_time = time.time()
-
-averaged_biases = {}
-
-for name in LANDMARKS:
-    samples = [
-        sample for sample in point_biases
-        if sample["name"] == name
-    ]
-
-    if samples:
-        averaged_biases[name] = {
-            "image": np.mean(
-                [sample["image"] for sample in samples], axis=0
-            ),
-            "world": np.mean(
-                [sample["world"] for sample in samples], axis=0
-            )
-        }
-    else:
-        averaged_biases[name] = {
-            "image": np.zeros(3),
-            "world": np.zeros(3)
-        }
 
 while True:
     ret, frame = cap.read()
@@ -178,16 +115,22 @@ while True:
 
     frame = cv2.flip(frame, 1)
     h, w, _ = frame.shape
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-    timestamp_ms = int((time.time() - start_time) * 1000)
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb
+    )
+
+    timestamp_s = time.time() - start_time
+    timestamp_ms = int(timestamp_s * 1000)
+
     result = detector.detect_for_video(mp_image, timestamp_ms)
     data_cycle = []
 
     if result.pose_landmarks and result.pose_world_landmarks:
         count -= 1
-        timestamp_s = time.time() - start_time
+
         pose = result.pose_landmarks[0]
         pose_world = result.pose_world_landmarks[0]
 
@@ -200,51 +143,45 @@ while True:
             conf = lm.visibility
 
             image_states[name] = image_filters[name].step(
-                [lm.x, lm.y, lm.z], confidence=conf, timestamp=timestamp_s
-            )
-            world_states[name] = world_filters[name].step(
-                [wlm.x, wlm.y, wlm.z], confidence=conf, timestamp=timestamp_s
+                [lm.x, lm.y, lm.z],
+                confidence=conf,
+                timestamp=timestamp_s
             )
 
+            world_states[name] = world_filters[name].step(
+                [wlm.x, wlm.y, wlm.z],
+                confidence=conf,
+                timestamp=timestamp_s
+            )
+
+        # Draw filtered image landmarks
         for name, state in image_states.items():
-            pt = (int(state[0] * w), int(state[1] * h))
+            pt = (
+                int(state[0] * w),
+                int(state[1] * h)
+            )
             draw_depth_point(frame, pt, state[2])
 
-        # Here
+        # Apply fixed hip bias correction
         HIP_BIAS = -0.035
 
-        r_hip_corrected = bias_hip_outward(
+        world_corrected = world_states.copy()
+
+        world_corrected["r_hip"] = bias_hip_outward(
             world_states["r_hip"],
             world_states["l_hip"],
             HIP_BIAS
         )
 
-        l_hip_corrected = bias_hip_outward(
+        world_corrected["l_hip"] = bias_hip_outward(
             world_states["l_hip"],
             world_states["r_hip"],
             HIP_BIAS
         )
 
-        world_corrected = {}
-
-        for name, state in world_states.items():
-            bias = averaged_biases[name]["world"]
-            world_corrected[name] = state + bias
-
-        r_hip_corrected = bias_hip_outward(
-            world_corrected["r_hip"],
-            world_corrected["l_hip"],
-            -0.035
-        )
-
-        l_hip_corrected = bias_hip_outward(
-            world_corrected["l_hip"],
-            world_corrected["r_hip"],
-            -0.035
-        )
-
+        # Knee valgus / varus deviation
         r_score, r_scale_pos = detection_funcs.knee_deviation(
-            r_hip_corrected,
+            world_corrected["r_hip"],
             world_corrected["r_knee"],
             world_corrected["r_ankle"],
             offset=-0.03,
@@ -252,16 +189,17 @@ while True:
         )
 
         l_score, l_scale_pos = detection_funcs.knee_deviation(
-            l_hip_corrected,
+            world_corrected["l_hip"],
             world_corrected["l_knee"],
             world_corrected["l_ankle"],
             offset=0.03,
             side=False
         )
 
+        # Hip drop deviation
         hip_drop_scores = detection_funcs.hip_deviation([
-            l_hip_corrected,
-            r_hip_corrected
+            world_corrected["l_hip"],
+            world_corrected["r_hip"]
         ])
 
         l_hip_score = hip_drop_scores[0][0]
@@ -270,6 +208,7 @@ while True:
         r_hip_score = hip_drop_scores[1][0]
         r_hip_scale_pos = hip_drop_scores[1][1]
 
+        # Update trend data periodically
         if count == 0:
             r_valg_var.append(r_scale_pos)
             l_valg_var.append(l_scale_pos)
@@ -308,3 +247,4 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+detector.close()
