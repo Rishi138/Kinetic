@@ -284,7 +284,7 @@ while True:
             "labels": ["RIGHT", "LEFT"],
             "display": [r_hip_score, l_hip_score],
             "scale_pos": [r_hip_scale_pos, l_hip_scale_pos],
-            "bands": [0, 0.30, 0.40, 0.50, 0.60, 0.80, 1],
+            "bands": [0, 0.24, 0.27, 0.43, 0.71, 1],
             "curr_session_trend": [r_drop_var, l_drop_var]
         }
 

@@ -54,7 +54,7 @@ def hip_deviation(hips, neutral_pose):
             tag = "GOOD"
         elif magnitude < 0.095:
             tag = "SLIGHT"
-        elif magnitude < 0.015:
+        elif magnitude < 0.15:
             tag = "MILD"
         elif magnitude < 0.25:
             tag = "CONCERNING"
