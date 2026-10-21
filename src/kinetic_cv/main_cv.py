@@ -108,6 +108,67 @@ world_filters = {
 
 start_time = time.time()
 
+calibration_frames = 60
+neutral_pose_samples = {name: [] for name in LANDMARKS}
+
+time.sleep(5)  # set up camera
+print("Calibrating neutral pose...")
+
+while any(len(samples) < calibration_frames
+          for samples in neutral_pose_samples.values()):
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    frame = cv2.flip(frame, 1)
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb
+    )
+
+    timestamp_s = time.time() - start_time
+    timestamp_ms = int(timestamp_s * 1000)
+
+    result = detector.detect_for_video(mp_image, timestamp_ms)
+
+    if result.pose_landmarks and result.pose_world_landmarks:
+        pose = result.pose_landmarks[0]
+        pose_world = result.pose_world_landmarks[0]
+
+        for name, idx in LANDMARKS.items():
+            lm = pose[idx]
+            wlm = pose_world[idx]
+
+            # Only collect reliable landmark detections
+            if lm.visibility < 0.7:
+                continue
+
+            # Keep the existing Kalman filters running
+            state = world_filters[name].step(
+                [wlm.x, wlm.y, wlm.z],
+                confidence=lm.visibility,
+                timestamp=timestamp_s
+            )
+
+            if len(neutral_pose_samples[name]) < calibration_frames:
+                neutral_pose_samples[name].append(
+                    np.array(state, dtype=float).copy()
+                )
+
+    send_frame(frame)
+    cv2.waitKey(1)
+
+neutral_pose = {
+    name: np.mean(samples, axis=0)
+    for name, samples in neutral_pose_samples.items()
+    if len(samples) > 0
+}
+
+print("Neutral pose calibration complete.")
+print(neutral_pose)
+
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -184,23 +245,24 @@ while True:
             world_corrected["r_hip"],
             world_corrected["r_knee"],
             world_corrected["r_ankle"],
-            offset=-0.03,
-            side=True
+            -0.03,
+            True,
         )
 
         l_score, l_scale_pos = detection_funcs.knee_deviation(
             world_corrected["l_hip"],
             world_corrected["l_knee"],
             world_corrected["l_ankle"],
-            offset=0.03,
-            side=False
+            0.03,
+            False,
         )
 
         # Hip drop deviation
-        hip_drop_scores = detection_funcs.hip_deviation([
-            world_corrected["l_hip"],
-            world_corrected["r_hip"]
-        ])
+        hip_drop_scores = detection_funcs.hip_deviation(
+            [world_corrected["l_hip"],
+             world_corrected["r_hip"]],
+            neutral_pose
+        )
 
         l_hip_score = hip_drop_scores[0][0]
         l_hip_scale_pos = hip_drop_scores[0][1]

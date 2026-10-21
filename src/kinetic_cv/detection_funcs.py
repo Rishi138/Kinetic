@@ -10,11 +10,11 @@ TEXT_MUTED_BGR = (150, 150, 155)
 TEXT_BRIGHT_BGR = (235, 235, 235)
 
 
-
-def hip_deviation(hips):
+def hip_deviation(hips, neutral_pose):
     lx, ly = hips[0][0], hips[0][1]
     rx, ry = hips[1][0], hips[1][1]
 
+    # Current hip alignment
     dx = rx - lx
     dy = ry - ly
 
@@ -22,13 +22,27 @@ def hip_deviation(hips):
         bad = ["UNRELIABLE HIP POSITION", 0.0]
         return [bad.copy(), bad.copy()]
 
-    # Positive means right hip is lower.
     hip_drop = dy / abs(dx)
+
+    # Calibrated neutral hip alignment
+    neutral_l = neutral_pose["l_hip"]
+    neutral_r = neutral_pose["r_hip"]
+
+    neutral_dx = neutral_r[0] - neutral_l[0]
+    neutral_dy = neutral_r[1] - neutral_l[1]
+
+    if abs(neutral_dx) < 1e-6:
+        bad = ["UNRELIABLE NEUTRAL HIP POSITION", 0.0]
+        return [bad.copy(), bad.copy()]
+
+    neutral_hip_drop = neutral_dy / abs(neutral_dx)
+
+    # Measure change relative to neutral posture
+    hip_drop -= neutral_hip_drop
 
     results = []
 
     # Index 0 = left hip; index 1 = right hip.
-    # Only score a hip when that hip is actually lower.
     for deviation, direction in [
         (-hip_drop, "LEFT HIP DROP"),
         (hip_drop, "RIGHT HIP DROP")
@@ -36,15 +50,15 @@ def hip_deviation(hips):
         deviation = max(0.0, deviation)
         magnitude = deviation
 
-        if magnitude < 0.07:
+        if magnitude < 0.085:
             tag = "GOOD"
-        elif magnitude < 0.08:
+        elif magnitude < 0.095:
             tag = "SLIGHT"
-        elif magnitude < 0.09:
+        elif magnitude < 0.015:
             tag = "MILD"
-        elif magnitude < 0.1:
+        elif magnitude < 0.25:
             tag = "CONCERNING"
-        elif magnitude < 0.11:
+        elif magnitude < 0.35:
             tag = "BAD"
         else:
             tag = "SEVERE"
@@ -91,7 +105,7 @@ def knee_deviation(hip, knee, ankle, offset, side):
         knee_dist *= 0.6
     elif knee_dist < 0:
         tag = "VALGUS"
-        knee_dist *= 2
+        knee_dist *= 2.5
 
     if abs(knee_dist) < 0.035:
         scale_pos = abs(knee_dist) / 0.1
